@@ -1,0 +1,6 @@
+{
+  "name": "Radar del Cono de Futuros",
+  "description": "Videojuego 3D interactivo para aprender y dominar la Prospectiva Estratégica, analizando el Cono de Futuros, señales débiles, tendencias y cisnes negros.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

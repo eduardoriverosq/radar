@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Radar del Cono de Futuros - Simulador 3D de Prospectiva Estratégica</title>
+  <meta name="description" content="Aprende Prospectiva Estratégica interactuando con el Cono de Futuros, clasificando tendencias, señales débiles y cisnes negros en 3D." />
+
+  <!-- Google Fonts: Orbitron y Rajdhani / Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Three.js y OrbitControls desde CDN con respaldo -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #070913;
+      --panel-bg: rgba(11, 16, 33, 0.92);
+      --border-cyan: #38bdf8;
+      --border-glow: rgba(56, 189, 248, 0.35);
+      
+      --color-posible: #38bdf8;
+      --color-plausible: #a855f7;
+      --color-probable: #f59e0b;
+      --color-deseable: #10b981;
+      --color-cisne: #f43f5e;
+      --color-tendencia: #3b82f6;
+      --color-debil: #eab308;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-dark);
+      color: #f1f5f9;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Lienzo 3D */
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Capa UI */
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 12px;
+    }
+
+    .clickable {
+      pointer-events: auto !important;
+    }
+
+    /* Barra Superior */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-glow);
+      border-radius: 12px;
+      padding: 10px 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      background: linear-gradient(90deg, #38bdf8, #10b981);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .brand-sub {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.76rem;
+      color: #94a3b8;
+    }
+
+    .score-group {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .score-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .score-label {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .score-val {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    .btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #f1f5f9;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 7px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn:hover {
+      background: rgba(56, 189, 248, 0.3);
+      border-color: #38bdf8;
+      transform: translateY(-1px);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, rgba(2, 132, 199, 0.7), rgba(16, 185, 129, 0.7));
+      border-color: #38bdf8;
+      color: #fff;
+    }
+
+    /* Zona Central */
+    .main-body {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin: 8px 0;
+      gap: 14px;
+      pointer-events: none;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Panel Izquierdo: Lista de Señales */
+    .left-panel {
+      width: 290px;
+      max-height: calc(100vh - 210px);
+      background: var(--panel-bg);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-glow);
+      border-radius: 12px;
+      padding: 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    }
+    .left-panel::-webkit-scrollbar {
+      width: 4px;
+    }
+    .left-panel::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.3);
+      border-radius: 2px;
+    }
+
+    .panel-header {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: #38bdf8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .event-item {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .event-item:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: #38bdf8;
+      transform: translateX(2px);
+    }
+    .event-item.active {
+      background: rgba(56, 189, 248, 0.35);
+      border-color: #38bdf8;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+    .event-item.completed {
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+
+    .event-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Panel Derecho: Tarjeta del Evento */
+    .card-panel {
+      width: 380px;
+      max-height: calc(100vh - 210px);
+      background: var(--panel-bg);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-glow);
+      border-radius: 12px;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+    }
+
+    .card-tag {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+      display: inline-block;
+      width: fit-content;
+    }
+
+    .card-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.98rem;
+      font-weight: 700;
+      line-height: 1.35;
+      color: #fff;
+    }
+
+    .card-desc {
+      font-size: 0.83rem;
+      line-height: 1.5;
+      color: #cbd5e1;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 10px;
+      border-radius: 8px;
+      border-left: 3px solid #38bdf8;
+    }
+
+    .step-box {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .step-label {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .choice-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .choice-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 8px;
+      padding: 8px 6px;
+      color: #e2e8f0;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .choice-btn:hover {
+      background: rgba(56, 189, 248, 0.25);
+      border-color: #38bdf8;
+    }
+    .choice-btn.selected-correct {
+      background: rgba(16, 185, 129, 0.35) !important;
+      border-color: #10b981 !important;
+      color: #34d399 !important;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.4) !important;
+    }
+    .choice-btn.selected-wrong {
+      background: rgba(244, 63, 94, 0.35) !important;
+      border-color: #f43f5e !important;
+      color: #fda4af !important;
+    }
+
+    .feedback-box {
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid #10b981;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 0.8rem;
+      line-height: 1.45;
+      display: none;
+      animation: fadeIn 0.25s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Barra Inferior: Carrusel Rápido de Señales */
+    .bottom-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-glow);
+      border-radius: 12px;
+      padding: 10px 14px;
+    }
+
+    .bottom-signals-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .bottom-signals-strip::-webkit-scrollbar {
+      height: 4px;
+    }
+    .bottom-signals-strip::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.3);
+      border-radius: 2px;
+    }
+
+    .quick-signal-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #cbd5e1;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .quick-signal-btn:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: #38bdf8;
+      color: #fff;
+    }
+    .quick-signal-btn.active {
+      background: rgba(56, 189, 248, 0.35);
+      border-color: #38bdf8;
+      color: #7dd3fc;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.76rem;
+      color: #94a3b8;
+    }
+    .legend-chips {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .legend-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 600;
+      font-size: 0.78rem;
+    }
+    .dot-posible { background: var(--color-posible); width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 6px var(--color-posible); }
+    .dot-plausible { background: var(--color-plausible); width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 6px var(--color-plausible); }
+    .dot-probable { background: var(--color-probable); width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 6px var(--color-probable); }
+    .dot-deseable { background: var(--color-deseable); width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 6px var(--color-deseable); }
+
+    /* Tooltip 3D */
+    #hover-tooltip {
+      position: absolute;
+      z-index: 50;
+      background: rgba(11, 16, 33, 0.95);
+      border: 1px solid #38bdf8;
+      border-radius: 6px;
+      padding: 5px 9px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #fff;
+      pointer-events: none;
+      transform: translate(-50%, -130%);
+      display: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+      white-space: nowrap;
+    }
+
+    /* Modal de Teoría */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(4, 7, 18, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.active { display: flex; }
+    .modal-box {
+      background: #0b1126;
+      border: 1px solid #38bdf8;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 650px;
+      max-height: 85vh;
+      overflow-y: auto;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+      position: relative;
+    }
+
+    @media (max-width: 820px) {
+      .main-body { flex-direction: column; overflow-y: auto; }
+      .left-panel, .card-panel { width: 100%; max-height: none; }
+      .legend-chips { flex-wrap: wrap; gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Lienzo 3D -->
+  <div id="canvas-container"></div>
+
+  <!-- Tooltip flotante 3D -->
+  <div id="hover-tooltip">Evento 3D</div>
+
+  <!-- Capa UI -->
+  <div id="ui-layer">
+    
+    <!-- BARRA SUPERIOR -->
+    <header class="top-bar clickable">
+      <div class="brand">
+        <div style="font-size:1.4rem;">🎯</div>
+        <div>
+          <div class="brand-title">RADAR DEL CONO DE FUTUROS</div>
+          <div class="brand-sub">Simulador Interactivo de Prospectiva Estratégica</div>
+        </div>
+      </div>
+
+      <div class="score-group">
+        <div class="score-badge">
+          <span class="score-label">Resiliencia</span>
+          <span class="score-val" id="stat-resilience" style="color: #38bdf8;">50%</span>
+        </div>
+        <div class="score-badge">
+          <span class="score-label">Alineación Preferible</span>
+          <span class="score-val" id="stat-alignment" style="color: #10b981;">40%</span>
+        </div>
+        <div class="score-badge">
+          <span class="score-label">Completados</span>
+          <span class="score-val" id="stat-progress" style="color: #f59e0b;">0 / 8</span>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary" id="btn-next-event">⚡ Siguiente Señal</button>
+        <button class="btn" id="btn-open-theory">📖 Teoría</button>
+        <button class="btn" id="btn-reset">↺ Reiniciar</button>
+      </div>
+    </header>
+
+    <!-- ZONA CENTRAL -->
+    <div class="main-body">
+      
+      <!-- Panel Izquierdo: Lista Pre-Renderizada de Señales -->
+      <div class="left-panel clickable" id="events-list-panel">
+        <div class="panel-header">
+          <span>Señales en el Radar</span>
+          <span style="font-size:0.7rem; color:#94a3b8;">(Selecciona una)</span>
+        </div>
+        <div id="events-list-container" style="display:flex; flex-direction:column; gap:6px;">
+          <!-- Pre-renderizado estático para visibilidad instantánea -->
+          <div class="event-item active" data-id="e1">
+            <span class="event-dot" style="background:#3b82f6; box-shadow:0 0 6px #3b82f6;"></span>
+            <div style="display:flex; flex-direction:column;">
+              <span style="font-size:0.75rem; font-weight:700; color:#fff;">2028 · IA en Educación</span>
+              <span style="font-size:0.68rem; color:#94a3b8;">Megatendencia</span>
+            </div>
+          </div>
+          <div class="event-item" data-id="e2">
+            <span class="event-dot" style="background:#eab308; box-shadow:0 0 6px #eab308;"></span>
+            <div style="display:flex; flex-direction:column;">
+              <span style="font-size:0.75rem; font-weight:700; color:#fff;">2032 · Biorreactores Caseros</span>
+              <span style="font-size:0.68rem; color:#94a3b8;">Señal Débil</span>
+            </div>
+          </div>
+          <div class="event-item" data-id="e3">
+            <span class="event-dot" style="background:#f43f5e; box-shadow:0 0 6px #f43f5e;"></span>
+            <div style="display:flex; flex-direction:column;">
+              <span style="font-size:0.75rem; font-weight:700; color:#fff;">2035 · Tormenta Solar Carrington</span>
+              <span style="font-size:0.68rem; color:#94a3b8;">Cisne Negro</span>
+            </div>
+          </div>
+          <div class="event-item" data-id="e4">
+            <span class="event-dot" style="background:#3b82f6; box-shadow:0 0 6px #3b82f6;"></span>
+            <div style="display:flex; flex-direction:column;">
+              <span style="font-size:0.75rem; font-weight:700; color:#fff;">2039 · Descarbonización 75%</span>
+              <span style="font-size:0.68rem; color:#94a3b8;">Megatendencia</span>
+            </div>
+          </div>
+          <div class="event-item" data-id="e5">
+            <span class="event-dot" style="background:#f43f5e; box-shadow:0 0 6px #f43f5e;"></span>
+            <div style="display:flex; flex-direction:column;">
+              <span style="font-size:0.75rem; font-weight:700; color:#fff;">2042 · Salto Cuántico Financiero</span>
+              <span style="font-size:0.68rem; color:#94a3b8;">Cisne Negro</span>
+            </div>
+          </div>
+          <div class="event-item" data-id="e6">
+            <span class="event-dot" style="background:#eab308; box-shadow:0 0 6px #eab308;"></span>
+            <div style="display:flex; flex-direction:column;">
+              <span style="font-size:0.75rem; font-weight:700; color:#fff;">2045 · Enzima de Microplásticos</span>
+              <span style="font-size:0.68rem; color:#94a3b8;">Señal Débil</span>
+            </div>
+          </div>
+          <div class="event-item" data-id="e7">
+            <span class="event-dot" style="background:#3b82f6; box-shadow:0 0 6px #3b82f6;"></span>
+            <div style="display:flex; flex-direction:column;">
+              <span style="font-size:0.75rem; font-weight:700; color:#fff;">2048 · Inversión Demográfica</span>
+              <span style="font-size:0.68rem; color:#94a3b8;">Megatendencia</span>
+            </div>
+          </div>
+          <div class="event-item" data-id="e8">
+            <span class="event-dot" style="background:#eab308; box-shadow:0 0 6px #eab308;"></span>
+            <div style="display:flex; flex-direction:column;">
+              <span style="font-size:0.75rem; font-weight:700; color:#fff;">2052 · Fusión Nuclear Estable</span>
+              <span style="font-size:0.68rem; color:#94a3b8;">Señal Débil</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel Derecho: Tarjeta de Análisis del Evento Seleccionado -->
+      <div class="card-panel clickable" id="event-action-panel">
+        <div id="active-state" style="display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="card-tag" id="card-tag">SEÑAL ACTIVA</span>
+            <span style="font-family:'Rajdhani', sans-serif; font-size:0.85rem; color:#fbbf24; font-weight:700;" id="card-year">Horizonte 2028</span>
+          </div>
+
+          <h2 class="card-title" id="card-title">IA Autónoma en Educación Primaria</h2>
+          <div class="card-desc" id="card-desc">
+            Tutorías inteligentes hiperpersonalizadas integradas en el sistema educativo global. Inercia acelerada por inversión masiva.
+          </div>
+
+          <!-- Paso 1: Clasificación directa -->
+          <div class="step-box">
+            <span class="step-label">1. ¿Qué tipo de fenómeno prospectivo es?</span>
+            <div class="choice-grid" id="type-choices">
+              <button class="choice-btn" data-type="tendencia">📈 Megatendencia<br><span style="font-size:0.65rem; color:#94a3b8;">Inercia estructural</span></button>
+              <button class="choice-btn" data-type="debil">🌱 Señal Débil<br><span style="font-size:0.65rem; color:#94a3b8;">Indicio emergente</span></button>
+              <button class="choice-btn" data-type="cisne">🦢 Cisne Negro<br><span style="font-size:0.65rem; color:#94a3b8;">Sorpresa e impacto</span></button>
+            </div>
+          </div>
+
+          <!-- Paso 2: Acción Estratégica -->
+          <div class="step-box" id="action-step-box" style="display:none;">
+            <span class="step-label">2. Decisión Estratégica en el Presente (t=0)</span>
+            <div class="choice-grid" id="action-choices">
+              <button class="choice-btn" data-action="amplificar" style="color:#34d399;">🚀 Amplificar<br><span style="font-size:0.65rem; color:#94a3b8;">Hacia Deseable</span></button>
+              <button class="choice-btn" data-action="mitigar" style="color:#fb7185;">🛡️ Mitigar<br><span style="font-size:0.65rem; color:#94a3b8;">Reducir riesgo</span></button>
+              <button class="choice-btn" data-action="monitorear" style="color:#7dd3fc;">🔭 Monitorear<br><span style="font-size:0.65rem; color:#94a3b8;">Vigilancia activa</span></button>
+            </div>
+          </div>
+
+          <!-- Retroalimentación Pedagógica -->
+          <div class="feedback-box" id="feedback-box">
+            <div id="feedback-title" style="font-weight:700; color:#34d399; margin-bottom:4px;">¡Análisis Correcto!</div>
+            <div id="feedback-text" style="color:#cbd5e1;">Explicación pedagógica del concepto.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- BARRA INFERIOR: CARRUSEL HORIZONTAL RÁPIDO Y LEYENDA -->
+    <footer class="bottom-bar clickable">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-family:'Orbitron', monospace; font-size:0.76rem; font-weight:700; color:#38bdf8; white-space:nowrap;">
+          📡 RADAR DE SEÑALES:
+        </span>
+        <div class="bottom-signals-strip" id="bottom-strip-container">
+          <button class="quick-signal-btn active" data-id="e1">2028 · IA Educación</button>
+          <button class="quick-signal-btn" data-id="e2">2032 · Alimentos</button>
+          <button class="quick-signal-btn" data-id="e3">2035 · Tormenta Solar</button>
+          <button class="quick-signal-btn" data-id="e4">2039 · Descarbonización</button>
+          <button class="quick-signal-btn" data-id="e5">2042 · Salto Cuántico</button>
+          <button class="quick-signal-btn" data-id="e6">2045 · Microplásticos</button>
+          <button class="quick-signal-btn" data-id="e7">2048 · Demografía</button>
+          <button class="quick-signal-btn" data-id="e8">2052 · Fusión Nuclear</button>
+        </div>
+      </div>
+
+      <div class="legend-row">
+        <div class="legend-chips">
+          <span style="font-weight:700; color:#fff;">ZONAS:</span>
+          <div class="legend-chip"><span class="dot-posible"></span><span>1. Posible</span></div>
+          <div class="legend-chip"><span class="dot-plausible"></span><span>2. Plausible</span></div>
+          <div class="legend-chip"><span class="dot-probable"></span><span>3. Probable</span></div>
+          <div class="legend-chip"><span class="dot-deseable"></span><span>4. Deseable (Meta)</span></div>
+        </div>
+        <div>
+          <span>🖱️ Clic en cualquier esfera 3D o botón para analizar · Arrastra para girar cono</span>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- MODAL DE TEORÍA -->
+  <div class="modal-backdrop" id="modal-theory">
+    <div class="modal-box clickable">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="font-family:'Orbitron', monospace; color:#38bdf8;">Fundamentos de Prospectiva</h3>
+        <button class="btn" id="btn-close-theory" style="padding:4px 10px;">✕ Cerrar</button>
+      </div>
+      <p style="font-size:0.85rem; line-height:1.5; color:#cbd5e1; margin-bottom:14px;">
+        El <b>Cono de Futuros</b> (Voros, Hancock y Bezold) ilustra cómo a partir del <b>Presente ($t=0$)</b> se bifurcan múltiples futuros alternativos:
+      </p>
+      <ul style="padding-left:18px; font-size:0.82rem; line-height:1.6; color:#94a3b8; margin-bottom:14px;">
+        <li><b style="color:var(--color-posible)">1. Futuros Posibles:</b> Todo lo que "podría suceder" con nuevos paradigmas futuros.</li>
+        <li><b style="color:var(--color-plausible)">2. Futuros Plausibles:</b> Lo que "tiene sentido que suceda" con dinámicas socio-técnicas viables.</li>
+        <li><b style="color:var(--color-probable)">3. Futuros Probables:</b> Hacia dónde nos lleva la inercia actual (*Megatendencias*).</li>
+        <li><b style="color:var(--color-deseable)">4. Futuros Preferibles:</b> La meta ética y estratégica que buscamos construir activamente.</li>
+      </ul>
+      <p style="font-size:0.82rem; color:#cbd5e1; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
+        <b>Fenómenos:</b> Las <i>Megatendencias</i> tienen gran inercia; las <i>Señales Débiles</i> son indicios emergentes; los <i>Cisnes Negros</i> son disrupciones imprevistas de gran escala.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      'use strict';
+
+      /* ==========================================
+         1. BASE DE DATOS DE EVENTOS
+         ========================================== */
+      const EVENTS = [
+        {
+          id: 'e1',
+          title: 'IA Autónoma en Educación Primaria',
+          year: 2028,
+          label: 'IA 2028',
+          nature: 'tendencia',
+          bestAction: 'amplificar',
+          desc: 'Tutorías inteligentes hiperpersonalizadas integradas en el sistema educativo global. Inercia acelerada por inversión masiva.',
+          pedagogy: 'Es una MEGATENDENCIA: tiene alta inercia histórica y adopción previsible en el eje central de Futuros Probables.',
+          pos: { x: -6, y: 3, z: 22 }
+        },
+        {
+          id: 'e2',
+          title: 'Biorreactores de Alimentos Domésticos',
+          year: 2032,
+          label: 'Alimentos 2032',
+          nature: 'debil',
+          bestAction: 'amplificar',
+          desc: 'Primeras comunidades urbanas cultivan proteína de micelio en cocinas, reduciendo la dependencia del sector ganadero tradicional.',
+          pedagogy: 'Es una SEÑAL DÉBIL: fenómeno naciente con alto potencial transformador hacia futuros plausibles y sostenibles.',
+          pos: { x: 10, y: -5, z: 36 }
+        },
+        {
+          id: 'e3',
+          title: 'Tormenta Geomagnética Carrington 2.0',
+          year: 2035,
+          label: 'Carrington 2035',
+          nature: 'cisne',
+          bestAction: 'mitigar',
+          desc: 'Eyección solar extrema desconecta el 60% de satélites en órbita y sobrecarga transformadores eléctricos continentales.',
+          pedagogy: 'Es un CISNE NEGRO: evento imprevisto de bajísima probabilidad preconcebida pero impacto devastador. Requiere blindaje y planes de contingencia.',
+          pos: { x: -14, y: 12, z: 46 }
+        },
+        {
+          id: 'e4',
+          title: 'Descarbonización Energética al 75%',
+          year: 2039,
+          label: 'Energía 2039',
+          nature: 'tendencia',
+          bestAction: 'amplificar',
+          desc: 'Baterías de sodio y solar flotante desplazan definitivamente el carbón en mercados emergentes.',
+          pedagogy: 'Es una MEGATENDENCIA: responde a compromisos globales y curvas económicas de escala ineludibles.',
+          pos: { x: 4, y: 3, z: 54 }
+        },
+        {
+          id: 'e5',
+          title: 'Quiebre de Criptografía Cuántica',
+          year: 2042,
+          label: 'Cuántica 2042',
+          nature: 'cisne',
+          bestAction: 'mitigar',
+          desc: 'Un procesador cuántico de 50.000 cúbits rompe repentinamente los algoritmos bancarios estándar.',
+          pedagogy: 'Es un CISNE NEGRO TECNOLÓGICO: genera crisis de confianza global sin aviso previo.',
+          pos: { x: 16, y: 14, z: 64 }
+        },
+        {
+          id: 'e6',
+          title: 'Enzima de Degradación de Microplásticos',
+          year: 2045,
+          label: 'Plásticos 2045',
+          nature: 'debil',
+          bestAction: 'amplificar',
+          desc: 'Bacteria sintética no invasiva digiere polímeros plásticos en el océano Pacífico a velocidad récord.',
+          pedagogy: 'Es una SEÑAL DÉBIL con alto valor para el FUTURO DESEABLE: acelerarla crea soluciones ecológicas directas.',
+          pos: { x: 2, y: -4, z: 74 }
+        },
+        {
+          id: 'e7',
+          title: 'Inversión Crítica de la Pirámide Poblacional',
+          year: 2048,
+          label: 'Demografía 2048',
+          nature: 'tendencia',
+          bestAction: 'mitigar',
+          desc: 'Más del 35% de la población mundial supera los 65 años, forzando la automatización de cuidados médicos.',
+          pedagogy: 'Es una MEGATENDENCIA DEMOGRÁFICA: la fuerza con menor incertidumbre matemática en prospectiva.',
+          pos: { x: -8, y: -7, z: 82 }
+        },
+        {
+          id: 'e8',
+          title: 'Fusión Nuclear Comercial Estable',
+          year: 2052,
+          label: 'Fusión 2052',
+          nature: 'debil',
+          bestAction: 'amplificar',
+          desc: 'Reactores compactos viables proporcionan energía limpia casi ilimitada para desalinización e industria pesada.',
+          pedagogy: 'Es el horizonte del FUTURO DESEABLE: un salto estratégico que transforma todas las condiciones de escasez.',
+          pos: { x: 0, y: 0, z: 92 }
+        }
+      ];
+
+      /* ==========================================
+         2. ESTADO DEL JUEGO
+         ========================================== */
+      let state = {
+        resilience: 50,
+        alignment: 40,
+        completed: 0,
+        selectedEvent: null,
+        events: JSON.parse(JSON.stringify(EVENTS))
+      };
+
+      /* ==========================================
+         3. MOTOR THREE.JS Y ESCENA 3D
+         ========================================== */
+      let scene, camera, renderer, controls;
+      let coneGroup, presentGroup, nodesGroup, trajectoryMesh;
+      let raycaster, mouse;
+      let eventMeshes = new Map();
+      let hoveredMesh = null;
+      let pointerDownPos = { x: 0, y: 0 };
+
+      const CONE_LENGTH = 105;
+
+      function init3D() {
+        if (typeof THREE === 'undefined') {
+          console.warn('Three.js no listo, reintentando...');
+          setTimeout(init3D, 200);
+          return;
+        }
+
+        const container = document.getElementById('canvas-container');
+        if (!container) return;
+        const w = container.clientWidth || window.innerWidth;
+        const h = container.clientHeight || window.innerHeight;
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x060814);
+        scene.fog = new THREE.FogExp2(0x060814, 0.007);
+
+        camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 1000);
+        camera.position.set(-50, 38, -20);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(w, h);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.innerHTML = ''; // Limpiar previo
+        container.appendChild(renderer.domElement);
+
+        if (typeof THREE.OrbitControls !== 'undefined') {
+          controls = new THREE.OrbitControls(camera, renderer.domElement);
+          controls.enableDamping = true;
+          controls.dampingFactor = 0.08;
+          controls.target.set(0, 0, 48);
+        }
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const dirLight = new THREE.DirectionalLight(0x38bdf8, 1.4);
+        dirLight.position.set(30, 50, -20);
+        scene.add(dirLight);
+
+        coneGroup = new THREE.Group();
+        scene.add(coneGroup);
+
+        presentGroup = new THREE.Group();
+        scene.add(presentGroup);
+
+        nodesGroup = new THREE.Group();
+        scene.add(nodesGroup);
+
+        raycaster = new THREE.Raycaster();
+        mouse = new THREE.Vector2();
+
+        buildStars();
+        buildPresentNode();
+        buildCones();
+        buildEventSpheres();
+        updateTrajectory();
+
+        window.addEventListener('resize', onResize);
+
+        renderer.domElement.addEventListener('pointerdown', (e) => {
+          pointerDownPos = { x: e.clientX, y: e.clientY };
+        });
+
+        renderer.domElement.addEventListener('pointerup', (e) => {
+          handle3DClick(e, pointerDownPos);
+        });
+
+        renderer.domElement.addEventListener('pointermove', handle3DMove);
+
+        requestAnimationFrame(renderLoop);
+      }
+
+      function buildStars() {
+        const geo = new THREE.BufferGeometry();
+        const count = 700;
+        const pos = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) {
+          pos[i * 3] = (Math.random() - 0.5) * 300;
+          pos[i * 3 + 1] = (Math.random() - 0.5) * 200;
+          pos[i * 3 + 2] = (Math.random() - 0.2) * 220;
+        }
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        const mat = new THREE.PointsMaterial({ color: 0x38bdf8, size: 1.2, transparent: true, opacity: 0.6 });
+        scene.add(new THREE.Points(geo, mat));
+      }
+
+      function buildPresentNode() {
+        const sphere = new THREE.Mesh(
+          new THREE.SphereGeometry(2.8, 24, 24),
+          new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x059669, emissiveIntensity: 0.9 })
+        );
+        presentGroup.add(sphere);
+
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(4.2, 0.12, 8, 48),
+          new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true })
+        );
+        ring.name = 'gyro';
+        presentGroup.add(ring);
+
+        const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), CONE_LENGTH + 5, 0x38bdf8, 3, 1.5);
+        coneGroup.add(arrow);
+      }
+
+      function buildCones() {
+        function makeCone(radius, colorHex, opacity) {
+          const g = new THREE.Group();
+          const geo = new THREE.ConeGeometry(radius, CONE_LENGTH, 36, 6, true);
+          geo.rotateX(-Math.PI / 2);
+          geo.translate(0, 0, CONE_LENGTH / 2);
+
+          const solid = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+            color: colorHex, transparent: true, opacity: opacity, side: THREE.DoubleSide, depthWrite: false
+          }));
+          const wire = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+            color: colorHex, wireframe: true, transparent: true, opacity: opacity * 2.5, depthWrite: false
+          }));
+          g.add(solid);
+          g.add(wire);
+          return g;
+        }
+
+        coneGroup.add(makeCone(42, 0x38bdf8, 0.05)); // 1. Posible
+        coneGroup.add(makeCone(28, 0xa855f7, 0.08)); // 2. Plausible
+        coneGroup.add(makeCone(14, 0xf59e0b, 0.12)); // 3. Probable
+
+        // 4. Deseable
+        const desGeo = new THREE.CylinderGeometry(8, 1, CONE_LENGTH, 24, 4, true);
+        desGeo.rotateX(-Math.PI / 2);
+        desGeo.translate(0, 0, CONE_LENGTH / 2);
+        const desMesh = new THREE.Mesh(desGeo, new THREE.MeshStandardMaterial({
+          color: 0x10b981, emissive: 0x059669, emissiveIntensity: 0.35, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false
+        }));
+        coneGroup.add(desMesh);
+      }
+
+      // Generar etiqueta de texto flotante en 3D
+      function createTextBillboard(text, colorStr) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 70;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.fillStyle = 'rgba(7, 9, 19, 0.88)';
+        ctx.strokeStyle = colorStr;
+        ctx.lineWidth = 4;
+        ctx.fillRect(4, 4, 248, 62);
+        ctx.strokeRect(4, 4, 248, 62);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 22px Rajdhani, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 128, 35);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+        const sprite = new THREE.Sprite(mat);
+        sprite.scale.set(10, 2.8, 1);
+        sprite.position.set(0, 4.2, 0);
+        return sprite;
+      }
+
+      function buildEventSpheres() {
+        nodesGroup.clear();
+        eventMeshes.clear();
+
+        state.events.forEach(ev => {
+          const group = new THREE.Group();
+          group.position.set(ev.pos.x, ev.pos.y, ev.pos.z);
+          group.userData = ev;
+
+          let colorHex = 0x3b82f6;
+          let colorStr = '#38bdf8';
+          if (ev.nature === 'debil') { colorHex = 0xeab308; colorStr = '#f59e0b'; }
+          if (ev.nature === 'cisne') { colorHex = 0xf43f5e; colorStr = '#f43f5e'; }
+          if (ev.done) { colorHex = 0x10b981; colorStr = '#10b981'; }
+
+          // Esfera núcleo grande (Radio 3.0)
+          const core = new THREE.Mesh(
+            new THREE.SphereGeometry(3.0, 24, 24),
+            new THREE.MeshStandardMaterial({
+              color: colorHex,
+              emissive: colorHex,
+              emissiveIntensity: 0.8,
+              roughness: 0.2
+            })
+          );
+          core.name = 'core';
+          group.add(core);
+
+          // Anillo orbital brillante
+          const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(4.4, 0.16, 8, 36),
+            new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.9 })
+          );
+          ring.name = 'ring';
+          ring.rotation.x = Math.PI / 3;
+          group.add(ring);
+
+          // Etiqueta flotante 3D
+          const labelSprite = createTextBillboard(ev.label || ev.title, colorStr);
+          labelSprite.name = 'label';
+          group.add(labelSprite);
+
+          // Hitbox invisible extra grande (Radio 8.0) para que sea facilísimo hacer clic
+          const hitSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(8.0, 12, 12),
+            new THREE.MeshBasicMaterial({ visible: false })
+          );
+          hitSphere.name = 'hitbox';
+          group.add(hitSphere);
+
+          nodesGroup.add(group);
+          eventMeshes.set(ev.id, group);
+        });
+      }
+
+      function updateTrajectory() {
+        if (!scene) return;
+        if (trajectoryMesh) {
+          scene.remove(trajectoryMesh);
+          trajectoryMesh.geometry.dispose();
+          trajectoryMesh = null;
+        }
+
+        const alignFactor = state.alignment / 100;
+        const devX = (1 - alignFactor) * 20;
+        const devY = (1 - alignFactor) * 15;
+
+        const points = [
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(devX * 0.25, devY * 0.25, 25),
+          new THREE.Vector3(devX * 0.6, devY * 0.6, 60),
+          new THREE.Vector3(devX, devY, CONE_LENGTH)
+        ];
+
+        const curve = new THREE.CatmullRomCurve3D(points);
+        const tubeGeo = new THREE.TubeGeometry(curve, 36, 0.6, 8, false);
+
+        let color = state.alignment >= 65 ? 0x10b981 : (state.alignment >= 45 ? 0x38bdf8 : 0xf43f5e);
+        const tubeMat = new THREE.MeshStandardMaterial({ color: color, emissive: color, emissiveIntensity: 0.8 });
+        trajectoryMesh = new THREE.Mesh(tubeGeo, tubeMat);
+        scene.add(trajectoryMesh);
+      }
+
+      function renderLoop() {
+        requestAnimationFrame(renderLoop);
+
+        const gyro = presentGroup?.getObjectByName('gyro');
+        if (gyro) gyro.rotation.z += 0.015;
+
+        eventMeshes.forEach(mesh => {
+          const ring = mesh.getObjectByName('ring');
+          if (ring) ring.rotation.z += 0.025;
+        });
+
+        if (controls) controls.update();
+        if (renderer && scene && camera) renderer.render(scene, camera);
+      }
+
+      function onResize() {
+        const container = document.getElementById('canvas-container');
+        if (!container || !renderer || !camera) return;
+        const w = container.clientWidth || window.innerWidth;
+        const h = container.clientHeight || window.innerHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      }
+
+      /* ==========================================
+         4. DETECCIÓN DE MOUSE Y CLICS (RAYCASTING)
+         ========================================== */
+      function getRaycastIntersects(event) {
+        if (!renderer || !camera) return [];
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        return raycaster.intersectObjects(nodesGroup.children, true);
+      }
+
+      function handle3DMove(e) {
+        const intersects = getRaycastIntersects(e);
+        const tooltip = document.getElementById('hover-tooltip');
+
+        if (intersects.length > 0) {
+          let nodeGroup = intersects[0].object;
+          while (nodeGroup.parent && nodeGroup.parent !== nodesGroup) {
+            nodeGroup = nodeGroup.parent;
+          }
+
+          if (hoveredMesh !== nodeGroup) {
+            if (hoveredMesh) hoveredMesh.scale.set(1, 1, 1);
+            hoveredMesh = nodeGroup;
+            hoveredMesh.scale.set(1.25, 1.25, 1.25);
+          }
+
+          tooltip.textContent = `${nodeGroup.userData.year}: ${nodeGroup.userData.title}`;
+          tooltip.style.left = `${e.clientX}px`;
+          tooltip.style.top = `${e.clientY}px`;
+          tooltip.style.display = 'block';
+          renderer.domElement.style.cursor = 'pointer';
+        } else {
+          if (hoveredMesh) {
+            hoveredMesh.scale.set(1, 1, 1);
+            hoveredMesh = null;
+          }
+          tooltip.style.display = 'none';
+          if (renderer) renderer.domElement.style.cursor = 'default';
+        }
+      }
+
+      const DRAG_CLICK_TOLERANCE_PX = 20;
+
+      function handle3DClick(e, startPos) {
+        if (startPos) {
+          const moveDist = Math.hypot(e.clientX - startPos.x, e.clientY - startPos.y);
+          if (moveDist > DRAG_CLICK_TOLERANCE_PX) return;
+        }
+
+        let intersects = getRaycastIntersects(e);
+        if (intersects.length === 0 && startPos) {
+          intersects = getRaycastIntersects(startPos);
+        }
+
+        if (intersects.length > 0) {
+          let nodeGroup = intersects[0].object;
+          while (nodeGroup.parent && nodeGroup.parent !== nodesGroup) {
+            nodeGroup = nodeGroup.parent;
+          }
+          selectEvent(nodeGroup.userData);
+        }
+      }
+
+      /* ==========================================
+         5. LÓGICA DE JUEGO Y CONSOLA TÁCTICA
+         ========================================== */
+      function renderEventsList() {
+        // 1. Actualizar panel izquierdo
+        const container = document.getElementById('events-list-container');
+        if (container) {
+          container.innerHTML = '';
+          state.events.forEach(ev => {
+            const item = document.createElement('div');
+            item.className = 'event-item';
+            item.dataset.id = ev.id;
+            if (state.selectedEvent && state.selectedEvent.id === ev.id) {
+              item.classList.add('active');
+            }
+            if (ev.done) {
+              item.classList.add('completed');
+            }
+
+            let dotColor = '#3b82f6';
+            if (ev.nature === 'debil') dotColor = '#eab308';
+            if (ev.nature === 'cisne') dotColor = '#f43f5e';
+            if (ev.done) dotColor = '#10b981';
+
+            item.innerHTML = `
+              <span class="event-dot" style="background:${dotColor}; box-shadow:0 0 6px ${dotColor};"></span>
+              <div style="display:flex; flex-direction:column;">
+                <span style="font-size:0.75rem; font-weight:700; color:#fff;">${ev.year} · ${ev.title}</span>
+                <span style="font-size:0.68rem; color:#94a3b8;">${ev.done ? '✓ Analizado' : (ev.nature === 'cisne' ? 'Cisne Negro' : (ev.nature === 'debil' ? 'Señal Débil' : 'Megatendencia'))}</span>
+              </div>
+            `;
+
+            item.addEventListener('click', () => selectEvent(ev));
+            container.appendChild(item);
+          });
+        }
+
+        // 2. Actualizar barra horizontal inferior
+        const strip = document.getElementById('bottom-strip-container');
+        if (strip) {
+          strip.innerHTML = '';
+          state.events.forEach(ev => {
+            const btn = document.createElement('button');
+            btn.className = `quick-signal-btn ${state.selectedEvent?.id === ev.id ? 'active' : ''}`;
+            btn.dataset.id = ev.id;
+            let icon = ev.done ? '✓' : (ev.nature === 'cisne' ? '🦢' : (ev.nature === 'debil' ? '🌱' : '📈'));
+            btn.innerHTML = `<span>${icon}</span> <span>${ev.year} · ${ev.label || ev.title.substring(0, 15)}</span>`;
+            btn.addEventListener('click', () => selectEvent(ev));
+            strip.appendChild(btn);
+          });
+        }
+
+        document.getElementById('stat-progress').textContent = `${state.completed} / ${state.events.length}`;
+      }
+
+      function selectEvent(ev) {
+        state.selectedEvent = ev;
+
+        // Animar cámara en 3D
+        if (controls) {
+          controls.target.set(ev.pos.x, ev.pos.y, ev.pos.z);
+        }
+
+        // Actualizar UI
+        document.getElementById('card-title').textContent = ev.title;
+        document.getElementById('card-year').textContent = `Horizonte ${ev.year}`;
+        document.getElementById('card-desc').textContent = ev.desc;
+
+        const tag = document.getElementById('card-tag');
+        if (ev.done) {
+          tag.textContent = 'ANALIZADO';
+          tag.style.background = 'rgba(16, 185, 129, 0.2)';
+          tag.style.color = '#34d399';
+        } else {
+          tag.textContent = 'SEÑAL ACTIVA';
+          tag.style.background = 'rgba(56, 189, 248, 0.2)';
+          tag.style.color = '#38bdf8';
+        }
+
+        // Resetear estilos de botones
+        document.querySelectorAll('#type-choices .choice-btn').forEach(btn => {
+          btn.className = 'choice-btn';
+          if (ev.done && btn.dataset.type === ev.nature) {
+            btn.classList.add('selected-correct');
+          }
+        });
+
+        document.querySelectorAll('#action-choices .choice-btn').forEach(btn => {
+          btn.className = 'choice-btn';
+          if (ev.done && btn.dataset.action === ev.bestAction) {
+            btn.classList.add('selected-correct');
+          }
+        });
+
+        const feedbackBox = document.getElementById('feedback-box');
+        const actionBox = document.getElementById('action-step-box');
+
+        if (ev.done) {
+          actionBox.style.display = 'flex';
+          feedbackBox.style.display = 'block';
+          document.getElementById('feedback-title').textContent = 'Concepto Aprendido:';
+          document.getElementById('feedback-text').textContent = ev.pedagogy;
+        } else {
+          actionBox.style.display = 'none';
+          feedbackBox.style.display = 'none';
+        }
+
+        renderEventsList();
+      }
+
+      function setupCardInteractions() {
+        // PASO 1: Selección de Tipo
+        document.querySelectorAll('#type-choices .choice-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const ev = state.selectedEvent;
+            if (!ev) return;
+
+            const chosen = btn.dataset.type;
+            const isCorrect = (chosen === ev.nature);
+
+            document.querySelectorAll('#type-choices .choice-btn').forEach(b => {
+              if (b.dataset.type === ev.nature) b.classList.add('selected-correct');
+              else if (b === btn) b.classList.add('selected-wrong');
+            });
+
+            if (isCorrect) {
+              state.resilience = Math.min(100, state.resilience + 10);
+            } else {
+              state.resilience = Math.max(10, state.resilience - 5);
+            }
+
+            document.getElementById('action-step-box').style.display = 'flex';
+            updateStats();
+          });
+        });
+
+        // PASO 2: Selección de Acción
+        document.querySelectorAll('#action-choices .choice-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const ev = state.selectedEvent;
+            if (!ev || ev.done) return;
+
+            const action = btn.dataset.action;
+            const isCorrect = (action === ev.bestAction);
+
+            if (isCorrect) {
+              btn.classList.add('selected-correct');
+              state.alignment = Math.min(100, state.alignment + 15);
+            } else {
+              btn.classList.add('selected-wrong');
+              state.alignment = Math.max(10, state.alignment - 5);
+            }
+
+            ev.done = true;
+            state.completed++;
+
+            // Cambiar color 3D
+            const mesh = eventMeshes.get(ev.id);
+            if (mesh) {
+              const core = mesh.getObjectByName('core');
+              if (core) {
+                core.material.color.setHex(0x10b981);
+                core.material.emissive.setHex(0x10b981);
+              }
+            }
+
+            const feedbackBox = document.getElementById('feedback-box');
+            feedbackBox.style.display = 'block';
+            document.getElementById('feedback-title').textContent = isCorrect ? '¡Gran Decisión Prospectiva!' : 'Nota Pedagógica:';
+            document.getElementById('feedback-text').textContent = ev.pedagogy;
+
+            updateStats();
+            updateTrajectory();
+            renderEventsList();
+          });
+        });
+
+        // Botón Siguiente Señal
+        document.getElementById('btn-next-event').addEventListener('click', () => {
+          const next = state.events.find(e => !e.done);
+          if (next) selectEvent(next);
+          else selectEvent(state.events[0]);
+        });
+
+        // Botón Reiniciar
+        document.getElementById('btn-reset').addEventListener('click', () => {
+          state.resilience = 50;
+          state.alignment = 40;
+          state.completed = 0;
+          state.selectedEvent = null;
+          state.events = JSON.parse(JSON.stringify(EVENTS));
+
+          eventMeshes.forEach((mesh, id) => {
+            const ev = state.events.find(e => e.id === id);
+            let colorHex = 0x3b82f6;
+            if (ev.nature === 'debil') colorHex = 0xeab308;
+            if (ev.nature === 'cisne') colorHex = 0xf43f5e;
+            const core = mesh.getObjectByName('core');
+            if (core) {
+              core.material.color.setHex(colorHex);
+              core.material.emissive.setHex(colorHex);
+            }
+          });
+
+          updateStats();
+          updateTrajectory();
+          selectEvent(state.events[0]);
+          if (camera && controls) {
+            camera.position.set(-50, 38, -20);
+            controls.target.set(0, 0, 48);
+          }
+        });
+
+        // Modal Teoría
+        const modal = document.getElementById('modal-theory');
+        document.getElementById('btn-open-theory').addEventListener('click', () => {
+          modal.classList.add('active');
+        });
+        document.getElementById('btn-close-theory').addEventListener('click', () => {
+          modal.classList.remove('active');
+        });
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) modal.classList.remove('active');
+        });
+      }
+
+      function updateStats() {
+        document.getElementById('stat-resilience').textContent = `${state.resilience}%`;
+        document.getElementById('stat-alignment').textContent = `${state.alignment}%`;
+        document.getElementById('stat-progress').textContent = `${state.completed} / ${state.events.length}`;
+      }
+
+      /* ==========================================
+         6. INICIALIZACIÓN ROBUSTA E INMEDIATA
+         ========================================== */
+      function boot() {
+        // 1. Mostrar datos en UI inmediatamente
+        renderEventsList();
+        setupCardInteractions();
+        updateStats();
+
+        // 2. Seleccionar evento inicial inmediatamente
+        if (state.events && state.events.length > 0) {
+          selectEvent(state.events[0]);
+        }
+
+        // 3. Inicializar Three.js con reintento si CDN está tardando
+        function tryInit3D() {
+          if (typeof THREE !== 'undefined') {
+            init3D();
+          } else {
+            setTimeout(tryInit3D, 150);
+          }
+        }
+        tryInit3D();
+      }
+
+      // Ejecutar de inmediato sin depender de si DOMContentLoaded ya ocurrió
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot);
+      } else {
+        boot();
+      }
+
+    })();
+  </script>
+</body>
+</html>
